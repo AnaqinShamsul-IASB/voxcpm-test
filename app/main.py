@@ -1,6 +1,7 @@
 import io
 import logging
 import os
+import re
 import tempfile
 from pathlib import Path
 from typing import Literal, Optional
@@ -101,6 +102,15 @@ def _get_output_sample_rate(model=None) -> int:
     return 16000
 
 
+def _split_text_into_sentences(text: str) -> list[str]:
+    cleaned_text = text.strip()
+    if not cleaned_text:
+        return []
+
+    chunks = re.split(r"(?<=[.!?])\s+|[\r\n]+", cleaned_text)
+    return [chunk.strip() for chunk in chunks if chunk and chunk.strip()]
+
+
 def _waveform_to_response(
     wav_array: np.ndarray,
     sample_rate: int,
@@ -178,6 +188,52 @@ def _generate_audio(
     return np.asarray(wav, dtype=np.float32)
 
 
+def _generate_audio_for_text(
+    *,
+    text: str,
+    control_instruction: Optional[str] = None,
+    prompt_wav_path: Optional[str] = None,
+    prompt_text: Optional[str] = None,
+    cfg_value: float = 2.0,
+    inference_timesteps: int = 10,
+    normalize: bool = False,
+    denoise: bool = False,
+) -> np.ndarray:
+    sentences = _split_text_into_sentences(text)
+    if len(sentences) <= 1:
+        return _generate_audio(
+            text=text,
+            control_instruction=control_instruction,
+            prompt_wav_path=prompt_wav_path,
+            prompt_text=prompt_text,
+            cfg_value=cfg_value,
+            inference_timesteps=inference_timesteps,
+            normalize=normalize,
+            denoise=denoise,
+        )
+
+    def generate_sentence(index: int, sentence: str) -> tuple[int, np.ndarray]:
+        print(f"Processing sentence {index + 1}/{len(sentences)}: {sentence}", flush=True)
+        wav = _generate_audio(
+            text=sentence,
+            control_instruction=control_instruction,
+            prompt_wav_path=prompt_wav_path,
+            prompt_text=prompt_text,
+            cfg_value=cfg_value,
+            inference_timesteps=inference_timesteps,
+            normalize=normalize,
+            denoise=denoise,
+        )
+        return index, wav
+
+    sentence_audio: list[Optional[np.ndarray]] = [None] * len(sentences)
+    for index, sentence in enumerate(sentences):
+        sent_index, wav = generate_sentence(index, sentence)
+        sentence_audio[sent_index] = wav
+
+    return np.concatenate([wav for wav in sentence_audio if wav is not None]).astype(np.float32, copy=False)
+
+
 class TTSRequest(BaseModel):
     text: str
     control_instruction: Optional[str] = None
@@ -203,7 +259,7 @@ async def text_to_speech(request: TTSRequest):
         raise HTTPException(status_code=400, detail="Text cannot be empty.")
 
     try:
-        wav = _generate_audio(
+        wav = _generate_audio_for_text(
             text=request.text,
             control_instruction=request.control_instruction,
             cfg_value=request.cfg_value,
@@ -253,7 +309,7 @@ async def clone_voice(
     try:
         ref_path = _save_audio_upload_as_wav(reference_audio)
 
-        wav = _generate_audio(
+        wav = _generate_audio_for_text(
             text=text,
             control_instruction=control_instruction,
             prompt_wav_path=ref_path,
