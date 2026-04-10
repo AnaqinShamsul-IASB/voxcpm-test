@@ -1,0 +1,15 @@
+# Tested with Python 3.12.8
+--extra-index-url https://download.pytorch.org/whl/cu130
+
+fastapi
+python-multipart
+uvicorn[standard]
+
+numpy
+pydub
+soundfile
+
+torch==2.11.0+cu130
+torchaudio==2.11.0+cu130
+
+voxcpm==2.0.2
