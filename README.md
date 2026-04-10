@@ -30,6 +30,7 @@ Notes:
 - `requirements.txt` uses the PyTorch CUDA wheel index for `cu130`.
 - If you only have CPU PyTorch installed, VoxCPM may fail during model warmup.
 - If `torch.compile` causes startup issues, set `VOXCPM_OPTIMIZE=false` before launching the app.
+- The denoiser is enabled by default; set `ENABLE_DENOISER=false` if you want to disable it.
 - VoxCPM2 reports a native output sample rate of `48000`, so the app now uses that automatically unless you override `OUTPUT_SAMPLE_RATE`.
 - The Docker image sets `TORCH_MATMUL_PRECISION=high`, which enables TF32-accelerated float32 matmuls on supported NVIDIA GPUs.
 
@@ -67,6 +68,7 @@ docker run --rm -p 8000:8000 --gpus all `
   -e MODEL_PATH=openbmb/VoxCPM2 `
   -e VOXCPM_OPTIMIZE=true `
   -e TORCH_MATMUL_PRECISION=high `
+  -e ENABLE_DENOISER=false `
   -e DEFAULT_AUDIO_FORMAT=mp3 `
   voxcpm-test
 ```
@@ -76,3 +78,5 @@ docker run --rm -p 8000:8000 --gpus all `
 - `POST /tts` for text-to-speech
 - `POST /tts/clone` for voice cloning with a reference audio file
 - `GET /health` for a simple health check
+
+For voice design, pass `control_instruction` and it will be prepended in parentheses to the text prompt, for example `(young woman, gentle and sweet)Hello, welcome to VoxCPM!`.

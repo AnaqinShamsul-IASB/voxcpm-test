@@ -27,6 +27,7 @@ OUTPUT_SAMPLE_RATE = os.getenv("OUTPUT_SAMPLE_RATE")
 REFERENCE_SAMPLE_RATE = int(os.getenv("REFERENCE_SAMPLE_RATE", "16000"))
 DEFAULT_OUTPUT_FORMAT = os.getenv("DEFAULT_AUDIO_FORMAT", "mp3").lower()
 VOXCPM_OPTIMIZE = os.getenv("VOXCPM_OPTIMIZE", "true").lower() in {"1", "true", "yes", "on"}
+ENABLE_DENOISER = os.getenv("ENABLE_DENOISER", "true").lower() in {"1", "true", "yes", "on"}
 TORCH_MATMUL_PRECISION = os.getenv("TORCH_MATMUL_PRECISION", "high").lower()
 
 tts_model = None
@@ -44,13 +45,12 @@ def load_model():
         logger.info("Loading VoxCPM model from %s", MODEL_ID)
         from voxcpm import VoxCPM
 
-        load_denoiser = os.getenv("ENABLE_DENOISER", "false").lower() in {"1", "true", "yes", "on"}
         tts_model = VoxCPM.from_pretrained(
             MODEL_ID,
-            load_denoiser=load_denoiser,
+            load_denoiser=ENABLE_DENOISER,
             optimize=VOXCPM_OPTIMIZE,
         )
-        logger.info("VoxCPM model loaded successfully.")
+        logger.info("VoxCPM model loaded successfully. Denoiser enabled: %s", ENABLE_DENOISER)
     return tts_model
 
 
@@ -99,6 +99,17 @@ def _get_output_sample_rate(model=None) -> int:
         if sample_rate:
             return int(sample_rate)
     return 16000
+
+
+def _apply_control_instruction(text: str, control_instruction: Optional[str]) -> str:
+    instruction = (control_instruction or "").strip()
+    if not instruction:
+        return text
+
+    if not (instruction.startswith("(") and instruction.endswith(")")):
+        instruction = f"({instruction})"
+
+    return f"{instruction}{text}"
 
 
 def _waveform_to_response(
@@ -157,6 +168,7 @@ def _generate_audio(
     denoise: bool = False,
 ) -> np.ndarray:
     model = load_model()
+    text = _apply_control_instruction(text, control_instruction)
 
     generate_kwargs = {
         "text": text,
