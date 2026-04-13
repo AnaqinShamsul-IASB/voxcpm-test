@@ -9,7 +9,7 @@ numpy
 pydub
 soundfile
 
-torch==2.11.0+cu130
-torchaudio==2.11.0+cu130
+torch==2.5.1+cu124
+torchaudio==2.5.1+cu124
 
-voxcpm==2.0.2
+nano-vllm-voxcpm

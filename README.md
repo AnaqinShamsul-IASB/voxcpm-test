@@ -1,6 +1,6 @@
 # voxcpm-test
 
-FastAPI wrapper around VoxCPM2 for text-to-speech and voice cloning.
+FastAPI wrapper around NanoVLLM-VoxCPM for text-to-speech and voice cloning.
 
 ## Run locally
 
@@ -26,13 +26,12 @@ http://127.0.0.1:8000/docs
 
 Notes:
 
-- The project expects a CUDA-enabled PyTorch install for GPU inference.
-- `requirements.txt` uses the PyTorch CUDA wheel index for `cu130`.
-- If you only have CPU PyTorch installed, VoxCPM may fail during model warmup.
-- If `torch.compile` causes startup issues, set `VOXCPM_OPTIMIZE=false` before launching the app.
-- The denoiser is enabled by default; set `ENABLE_DENOISER=false` if you want to disable it.
-- VoxCPM2 reports a native output sample rate of `48000`, so the app now uses that automatically unless you override `OUTPUT_SAMPLE_RATE`.
-- The Docker image sets `TORCH_MATMUL_PRECISION=high`, which enables TF32-accelerated float32 matmuls on supported NVIDIA GPUs.
+- NanoVLLM-VoxCPM is GPU-centric and expects Linux + CUDA + FlashAttention.
+- `requirements.txt` now installs `nano-vllm-voxcpm` instead of the old PyTorch VoxCPM wrapper.
+- If you only have CPU-only PyTorch available, the model will not run.
+- The main model path is read from `NANOVLLM_MODEL_PATH` and defaults to `openbmb/VoxCPM2`.
+- `NANOVLLM_SERVERPOOL_DEVICES` controls which GPUs the server pool uses, for example `0` or `0,1`.
+- The API now exposes `POST /generate` in addition to the compatibility aliases `/tts`, `/tts/clone`, and `POST /encode_latents`.
 
 ## Build and run with Docker
 
@@ -60,23 +59,29 @@ docker run --rm -p 8000:8000 --gpus all `
   voxcpm-test
 ```
 
-If you want to override the model path or audio settings, pass environment variables:
+If you want to override the model path or server-pool settings, pass environment variables:
 
 ```powershell
 docker run --rm -p 8000:8000 --gpus all `
   -v voxcpm-hf-cache:/cache/huggingface `
-  -e MODEL_PATH=openbmb/VoxCPM2 `
-  -e VOXCPM_OPTIMIZE=true `
-  -e TORCH_MATMUL_PRECISION=high `
-  -e ENABLE_DENOISER=false `
+  -e NANOVLLM_MODEL_PATH=openbmb/VoxCPM2 `
+  -e NANOVLLM_SERVERPOOL_DEVICES=0 `
+  -e NANOVLLM_SERVERPOOL_MAX_NUM_BATCHED_TOKENS=8192 `
+  -e NANOVLLM_SERVERPOOL_MAX_NUM_SEQS=16 `
+  -e NANOVLLM_SERVERPOOL_MAX_MODEL_LEN=4096 `
+  -e NANOVLLM_SERVERPOOL_GPU_MEMORY_UTILIZATION=0.95 `
   -e DEFAULT_AUDIO_FORMAT=mp3 `
   voxcpm-test
 ```
 
 ## Endpoints
 
-- `POST /tts` for text-to-speech
-- `POST /tts/clone` for voice cloning with a reference audio file
+- `POST /generate` for NanoVLLM-style text-to-speech generation
+- `POST /tts` for compatibility with the previous API
+- `POST /tts/clone` for compatibility with reference-audio voice cloning
+- `POST /encode_latents` to encode prompt audio into latents
+- `GET /info` for model metadata
+- `GET /ready` for readiness
 - `GET /health` for a simple health check
 
 For voice design, pass `control_instruction` and it will be prepended in parentheses to the text prompt, for example `(young woman, gentle and sweet)Hello, welcome to VoxCPM!`.
